@@ -36,9 +36,14 @@ let handleError result =
     | Failure errorMsg -> printfn "%s" errorMsg
     | _ -> ()
 
+//The path to the csproj file
+
+let getCsprojPath newName = Path.Combine(newName, newName + ".csproj")
+
 // renaming files and directories
 
 let renameDirectory oldName newName =
+    printfn "Renaming directory %s to %s" oldName newName
     try
         Directory.Move(oldName, newName)
         Success (oldName, newName)
@@ -46,8 +51,11 @@ let renameDirectory oldName newName =
         | ex -> Failure ex.Message
 
 let renameCsProj oldName newName =
+    let oldFileName = Path.Combine(newName, oldName + ".csproj")
+    let newFileName = getCsprojPath newName
+    printfn "Renaming csproj %s to %s" oldFileName newFileName
     try
-        File.Move(oldName + ".csproj", newName + ".csproj");
+        File.Move(oldFileName, newFileName);
         Success (oldName, newName)
     with
         | ex -> Failure ex.Message
@@ -60,30 +68,52 @@ let rec getFilesForModification basePath =
             yield! Directory.EnumerateFiles(basePath, matchPattern, SearchOption.AllDirectories)
     }
 
+let modifyFile filePath (replacements : (string * string) seq) = 
+    let oldContents = File.ReadAllText(filePath)     
+    let newContents = Seq.fold (fun (state : string) (pattern : string, replacmentText : string) -> state.Replace(pattern, replacmentText)) oldContents replacements
+
+    File.WriteAllText(filePath, newContents)
+
 let alterSlnFile oldName newName =
+    printfn "Altering sln file"
+
     let maybeSlnFile = Directory.EnumerateFiles(".", "*.sln") |> Seq.tryPick Some
+
     match maybeSlnFile with
-    | Some slnFile -> 
-        let oldSlnContents = File.ReadAllText(slnFile) 
-        let newSlnFileContents = oldSlnContents.Replace(oldName + ".csproj", newName + ".csproj")
-        File.WriteAllText(@"C:\Users\Public\TestFolder\WriteText.txt", newSlnFileContents)
+    | Some slnFilePath -> 
+        modifyFile slnFilePath [(oldName + ".csproj", newName + ".csproj")]
         Success (oldName, newName)
     | _ -> Failure "No .sln file found"
 
 let alterCsproj oldName newName =
-    let oldSlnContents = File.ReadAllText(newName + ".csproj") 
+    printfn "Altering .csproj AssemblyName and RootNamespace"
+    let filename = getCsprojPath newName
+    //TODO  
+    //modifyFile    
     Success (oldName, newName)
 
 let alterAssemblyInfo oldName newName =
-    Success (oldName, newName)
+    let assemblyInfoPath = Path.Combine [|newName; "Properties"; "AssemblyInfo.cs"|]
+
+    match File.Exists assemblyInfoPath with
+    | true ->
+        printfn "Altering %s" assemblyInfoPath
+        //TODO
+        Success (oldName, newName)
+    | false ->
+        printfn "No AssemblyInfo.cs found, skipping step"
+        Success (oldName, newName)   
 
 let alterNamespaces oldName newName =
+    printfn "Altering namespaces"
     Success (oldName, newName)
 
 let alterUsings oldName newName =
+    printfn "Altering usings"
     Success (oldName, newName)
 
 let alterProjectReferences oldName newName =
+    printfn "Altering project references"
     Success (oldName, newName)
 
 parseArgs 
