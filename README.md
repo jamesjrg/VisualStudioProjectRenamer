@@ -29,17 +29,8 @@ If it doesn't do quite what you want then just open the script, fiddle with it t
 
 How to run it:
 
-The script should be run in your root solution directory.
+As long as you have a relatively recent version of Visual Studio installed you can probably already have the F# interpreter for running interactive scripts installed, and because it is a script no compilation is necessary. Put this script in the root of your solution directory and then run something along the lines of:
 
-As long as you have a relatively recent version of Visual Studio installed you can probably have the F# interpreter for running interactive scripts installed somewhere like this:
+"C:\Program Files (x86)\Microsoft SDKs\F#\3.1\Framework\v4.0\Fsi.exe" VisualStudioProjectRenamer.fsx -- BadlyNamedProject LovelyNewName
 
-C:\Program Files (x86)\Microsoft SDKs\F#\3.1\Framework\v4.0\fsi.exe
-
-Because it is a script no compilation is necessary, just go to your root solution directory and run:
-
-C:\Program Files (x86)\Microsoft SDKs\F#\3.1\Framework\v4.0\fsi.exe [PATH_TO_THE_SCRIPT]VisualStudioProjectRenamer.fsx -- [old_project_name] [new_project_name]
-
-or if fsi.exe is already in your PATH:
-
-fsi.exe [PATH_TO_THE_SCRIPT]VisualStudioProjectRenamer.fsx -- [old_project_name] [new_project_name]
-
+If your Fsi.exe is located somewhere else then modify the above appropriately.

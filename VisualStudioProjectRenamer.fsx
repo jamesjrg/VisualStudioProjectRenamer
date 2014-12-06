@@ -29,18 +29,18 @@ let projectFileReplacements  oldName newName = [
 //Modifications for files within the project being renamed
 //A list of tuples, the first item is the regex to match, the second item the replacement text
 let modificationsForFilesInProject oldName newName = [
-    ("(\s*namespace )" + oldName, "\1" + newName);
+    ("(\s*namespace )" + oldName, "$1" + newName);
 ]
 
 //Modifications for files within the solution
 //A list of tuples, the first item is the regex to match, the second item the replacement text
 let modificationsForFilesInSolution oldName newName = [
-    ("(\s*using )" + oldName, "\1" + newName);
+    ("(\s*using )" + oldName, "$1" + newName);
 ]
 
 (* end config *)
 
-(* Definitions inspired by on Scott Wlaschin's railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/ *)
+(* Definitions inspired by Scott Wlaschin's post on railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/ *)
 
 type Result = 
     | Success of string * string
@@ -55,8 +55,14 @@ let bind func result =
 
 (* interpreting command line arguments *)
 
+//point free, not really sure if it makes things too unreadable
+let rec getArgs = function
+    | "--" :: tail -> List.toArray tail
+    | _ :: tail -> getArgs tail
+    | [] -> Array.empty
+
 let parseArgs =
-    let args = fsi.CommandLineArgs
+    let args = fsi.CommandLineArgs |> Array.toList |> getArgs
     if args.Length > 1 then Success (args.[0], args.[1]) else Failure "couldn't parse command line arguments"
 
 let validateArgs oldName newName =
