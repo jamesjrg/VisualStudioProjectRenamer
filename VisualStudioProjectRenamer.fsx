@@ -38,6 +38,14 @@ let modificationsForFilesInSolution oldName newName = [
     ("(\s*using )" + oldName, "$1" + newName);
 ]
 
+//Modifications for altering project references in other projects
+//A list of tuples, the first item is the regex to match, the second item the replacement text
+
+let modificationsForProjectReferences oldName newName = [
+    (sprintf @"%s\\%s\.csproj" oldName oldName, sprintf @"%s\\%s\.csproj" newName newName);
+    (sprintf "<Name>%s</Name>" oldName, sprintf "<Name>%s</Name>" newName);
+]
+
 (* end config *)
 
 (* Definitions inspired by Scott Wlaschin's post on railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/ *)
@@ -163,26 +171,32 @@ let maybeModifyAssemblyInfo oldName newName =
         printfn "No AssemblyInfo.cs found, skipping step"
         Success (oldName, newName)
 
-let getFilesForModificationInProject modifications newName =
-    let filesForSearch = getFilesForSearch newName
-    
-    let fileHasMatch file = Seq.exists (fun replacementTuple -> fileContainsRegex file <| fst replacementTuple) modifications
+let fileHasMatch file modifications =
+    Seq.exists (fun replacementTuple -> fileContainsRegex file <| fst replacementTuple) modifications
 
-    Seq.filter fileHasMatch filesForSearch
+let getFilesForModificationInProject modifications newName =
+    let filesForSearch = getFilesForSearch newName    
+    let matchFunc file = fileHasMatch file modifications
+
+    Seq.filter matchFunc filesForSearch
 
 let getFilesForModificationInSolution modifications =
     let filesForSearch = getFilesForSearch "."
+    let matchFunc file = fileHasMatch file modifications
 
-    let fileHasMatch file = Seq.exists (fun replacementTuple -> fileContainsRegex file <| fst replacementTuple) modifications
+    Seq.filter matchFunc filesForSearch
 
-    Seq.filter fileHasMatch filesForSearch
+let getOtherProjectFilesForModification modifications = 
+    let matchFunc file = fileHasMatch file modifications
+
+    Seq.filter matchFunc otherProjectFiles    
 
 let modifyFilesInProject oldName newName =
     printfn "Modifying files in project (e.g. namespace declarations)"
 
     let modifications = modificationsForFilesInProject oldName newName
-
     let filesForModification = getFilesForModificationInProject modifications newName
+
     for file in filesForModification do makeRegexReplacementsInFile file modifications
     Success (oldName, newName)
 
@@ -197,7 +211,11 @@ let modifyFilesInSolution oldName newName =
 
 let modifyProjectReferences oldName newName =
     printfn "Modifying project references"
-    //TODO
+
+    let modifications = modificationsForProjectReferences oldName newName    
+    let filesForModification = getOtherProjectFilesForModification modifications
+
+    for file in filesForModification do makeRegexReplacementsInFile file modifications
     Success (oldName, newName)
 
 parseArgs 
