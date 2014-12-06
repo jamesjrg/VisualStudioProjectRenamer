@@ -51,6 +51,9 @@ let bind func result =
     | Success (oldName, newName) -> func oldName newName
     | Failure f -> Failure f
 
+let (>>=) twoTrackInput switchFunction = 
+    bind switchFunction twoTrackInput
+
 (* end railways *)
 
 (* interpreting command line arguments *)
@@ -198,14 +201,14 @@ let modifyProjectReferences oldName newName =
     Success (oldName, newName)
 
 parseArgs 
-|> bind validateArgs
-|> bind renameProjectDirectory
-|> bind renameProjectFile
-|> bind modifySolutionFile
-|> bind modifyProjectFile
-|> bind maybeModifyAssemblyInfo
-|> bind modifyFilesInProject
-|> bind modifyFilesInSolution
-|> bind modifyProjectReferences
+>>= validateArgs
+>>= renameProjectDirectory
+>>= renameProjectFile
+>>= modifySolutionFile
+>>= modifyProjectFile
+>>= maybeModifyAssemblyInfo
+>>= modifyFilesInProject
+>>= modifyFilesInSolution
+>>= modifyProjectReferences
 |> handleError
 
