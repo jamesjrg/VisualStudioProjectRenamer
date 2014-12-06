@@ -1,11 +1,46 @@
 open System.IO
 open System.Text.RegularExpressions
 
-//Config
+(* config *)
 
+//the path to the .sln file - by default the first .sln file found in the current directory
+let maybeSlnFile = Directory.EnumerateFiles(".", "*.sln") |> Seq.tryPick Some
+
+//The path to the project file
+let projectFilePath newName = Path.Combine(newName, newName + ".csproj")
+
+//Project files in which references should be updated
+//to include sub-sub folders: Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories)
+let otherProjectFiles = seq {
+    for subDir in Directory.GetDirectories(".") do
+        yield! Directory.EnumerateFiles(subDir, "*.csproj")
+}
+
+//in which file types should the regex modifications be carried out
 let fileTypesToMatchForReplacement = ["*.cs"]
 
-//Definitions inspired by on Scott Wlaschin's railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/
+//Modifications for the project file
+//A list of tuples, the first item is a simple non-regex string to match, the second item the replacement text
+let projectFileReplacements  oldName newName = [
+    ("<AssemblyName>" + oldName, "<AssemblyName>" + newName);
+    ("<RootNamespace>" + oldName, "<RootNamespace>" + newName);
+]
+
+//Modifications for files within the project being renamed
+//A list of tuples, the first item is the regex to match, the second item the replacement text
+let modificationsForFilesInProject oldName newName = [
+    ("(\s*namespace )" + oldName, "\1" + newName);
+]
+
+//Modifications for files within the solution
+//A list of tuples, the first item is the regex to match, the second item the replacement text
+let modificationsForFilesInSolution oldName newName = [
+    ("(\s*using )" + oldName, "\1" + newName);
+]
+
+(* end config *)
+
+(* Definitions inspired by on Scott Wlaschin's railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/ *)
 
 type Result = 
     | Success of string * string
@@ -16,7 +51,9 @@ let bind func result =
     | Success (oldName, newName) -> func oldName newName
     | Failure f -> Failure f
 
-//Interpreting command line arguments
+(* end railways *)
+
+(* interpreting command line arguments *)
 
 let parseArgs =
     let args = fsi.CommandLineArgs
@@ -30,20 +67,20 @@ let validateArgs oldName newName =
         | false -> Success (oldName, newName)
     | false -> Failure (sprintf "No such directory: %s" oldName)
 
-// Error handler
+(* end arguing *)
+
+(* error handler *)
 
 let handleError result = 
     match result with
     | Failure errorMsg -> printfn "%s" errorMsg
     | _ -> ()
 
-//The path to the csproj file
+(* end errors *)
 
-let getCsprojPath newName = Path.Combine(newName, newName + ".csproj")
+(* renaming files and directories *)
 
-// renaming files and directories
-
-let renameDirectory oldName newName =
+let renameProjectDirectory oldName newName =
     printfn "Renaming directory %s to %s" oldName newName
     try
         Directory.Move(oldName, newName)
@@ -51,9 +88,9 @@ let renameDirectory oldName newName =
     with
         | ex -> Failure ex.Message
 
-let renameCsProj oldName newName =
+let renameProjectFile oldName newName =
     let oldFileName = Path.Combine(newName, oldName + ".csproj")
-    let newFileName = getCsprojPath newName
+    let newFileName = projectFilePath newName
     printfn "Renaming csproj %s to %s" oldFileName newFileName
     try
         File.Move(oldFileName, newFileName);
@@ -61,7 +98,9 @@ let renameCsProj oldName newName =
     with
         | ex -> Failure ex.Message
 
-// modifying files
+(* end renaming *)
+
+(* general file and directory manipulation functions *)
 
 let rec getFilesForSearch basePath =
     seq {
@@ -69,85 +108,98 @@ let rec getFilesForSearch basePath =
             yield! Directory.EnumerateFiles(basePath, matchPattern, SearchOption.AllDirectories)
     }
 
-let makeReplacementsInFile filePath (replacements : (string * string) seq) = 
+let makeSimpleReplacementsInFile filePath (replacements : (string * string) seq) = 
     let oldContents = File.ReadAllText(filePath)     
     let newContents = Seq.fold (fun (state : string) (pattern : string, replacmentText : string) -> state.Replace(pattern, replacmentText)) oldContents replacements
 
     File.WriteAllText(filePath, newContents)
 
-let regixifyFile filePath pattern replacement =
+let makeRegexReplacementsInFile filePath (replacements : (string * string) seq) = 
     let oldContents = File.ReadAllText(filePath)     
-    //TODO
-    let newContents = ""
+    let newContents = Seq.fold (fun (state : string) (pattern : string, replacmentText : string) -> Regex.Replace(state, pattern, replacmentText)) oldContents replacements
 
     File.WriteAllText(filePath, newContents)
-
-let alterSlnFile oldName newName =
-    printfn "Altering sln file"
-
-    let maybeSlnFile = Directory.EnumerateFiles(".", "*.sln") |> Seq.tryPick Some
-
-    match maybeSlnFile with
-    | Some slnFilePath -> 
-        makeReplacementsInFile slnFilePath [(oldName + ".csproj", newName + ".csproj")]
-        Success (oldName, newName)
-    | _ -> Failure "No .sln file found"
-
-let alterCsproj oldName newName =
-    printfn "Altering .csproj AssemblyName and RootNamespace"
-    makeReplacementsInFile (getCsprojPath newName) [
-        ("<AssemblyName>" + oldName, "<AssemblyName>" + newName);
-        ("<RootNamespace>" + oldName, "<RootNamespace>" + newName);
-    ]
-    Success (oldName, newName)
-
-let alterAssemblyInfo oldName newName =
-    let assemblyInfoPath = Path.Combine [|newName; "Properties"; "AssemblyInfo.cs"|]
-
-    match File.Exists assemblyInfoPath with
-    | true ->
-        printfn "Altering %s" assemblyInfoPath
-        makeReplacementsInFile assemblyInfoPath [(oldName, newName)];
-        Success (oldName, newName)
-    | false ->
-        printfn "No AssemblyInfo.cs found, skipping step"
-        Success (oldName, newName)
 
 let fileContainsRegex filePath pattern =
     let contents = File.ReadAllText(filePath)
     Regex.IsMatch(contents, pattern)
 
-let getFilesForModification newName regexMatch =
+(* end manipulation *)
+
+(* everything else *)
+
+let modifySolutionFile oldName newName =
+    printfn "Modifying sln file"
+
+    match maybeSlnFile with
+    | Some slnFilePath -> 
+        makeSimpleReplacementsInFile slnFilePath [(oldName + ".csproj", newName + ".csproj")]
+        Success (oldName, newName)
+    | _ -> Failure "No .sln file found"
+
+let modifyProjectFile oldName newName =
+    printfn "Modifying project file"
+    makeSimpleReplacementsInFile (projectFilePath newName) (projectFileReplacements  oldName newName)
+    Success (oldName, newName)
+
+let maybeModifyAssemblyInfo oldName newName =
+    let assemblyInfoPath = Path.Combine [|newName; "Properties"; "AssemblyInfo.cs"|]
+
+    match File.Exists assemblyInfoPath with
+    | true ->
+        printfn "Modifying %s" assemblyInfoPath
+        makeSimpleReplacementsInFile assemblyInfoPath [(oldName, newName)];
+        Success (oldName, newName)
+    | false ->
+        printfn "No AssemblyInfo.cs found, skipping step"
+        Success (oldName, newName)
+
+let getFilesForModificationInProject modifications newName =
     let filesForSearch = getFilesForSearch newName
-    Seq.filter (fun file -> fileContainsRegex file regexMatch) filesForSearch
+    
+    let fileHasMatch file = Seq.exists (fun replacementTuple -> fileContainsRegex file <| fst replacementTuple) modifications
 
-let alterNamespaces oldName newName =
-    printfn "Altering namespaces"
-    let regexMatch = "(\s*using )" + oldName;
-    let regexReplace = "\1" + newName;
-    let filesForModification = getFilesForModification newName regexMatch
-    for file in filesForModification do regixifyFile file regexMatch regexReplace
+    Seq.filter fileHasMatch filesForSearch
+
+let getFilesForModificationInSolution modifications =
+    let filesForSearch = getFilesForSearch "."
+
+    let fileHasMatch file = Seq.exists (fun replacementTuple -> fileContainsRegex file <| fst replacementTuple) modifications
+
+    Seq.filter fileHasMatch filesForSearch
+
+let modifyFilesInProject oldName newName =
+    printfn "Modifying files in project (e.g. namespace declarations)"
+
+    let modifications = modificationsForFilesInProject oldName newName
+
+    let filesForModification = getFilesForModificationInProject modifications newName
+    for file in filesForModification do makeRegexReplacementsInFile file modifications
     Success (oldName, newName)
 
-let alterUsings oldName newName =
-    printfn "Altering usings"
-    //TODO
+let modifyFilesInSolution oldName newName =
+    printfn "Modifying files in solution (e.g. using declarations)"
+
+    let modifications = modificationsForFilesInSolution oldName newName    
+
+    let filesForModification = getFilesForModificationInSolution modifications
+    for file in filesForModification do makeRegexReplacementsInFile file modifications
     Success (oldName, newName)
 
-let alterProjectReferences oldName newName =
-    printfn "Altering project references"
+let modifyProjectReferences oldName newName =
+    printfn "Modifying project references"
     //TODO
     Success (oldName, newName)
 
 parseArgs 
 |> bind validateArgs
-|> bind renameDirectory
-|> bind renameCsProj
-|> bind alterSlnFile
-|> bind alterCsproj
-|> bind alterAssemblyInfo
-|> bind alterNamespaces
-|> bind alterUsings
-|> bind alterProjectReferences
+|> bind renameProjectDirectory
+|> bind renameProjectFile
+|> bind modifySolutionFile
+|> bind modifyProjectFile
+|> bind maybeModifyAssemblyInfo
+|> bind modifyFilesInProject
+|> bind modifyFilesInSolution
+|> bind modifyProjectReferences
 |> handleError
 
