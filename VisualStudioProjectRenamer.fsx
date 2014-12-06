@@ -189,9 +189,9 @@ let modifyFilesInProject oldName newName =
 let modifyFilesInSolution oldName newName =
     printfn "Modifying files in solution (e.g. using declarations)"
 
-    let modifications = modificationsForFilesInSolution oldName newName    
-
+    let modifications = modificationsForFilesInSolution oldName newName
     let filesForModification = getFilesForModificationInSolution modifications
+
     for file in filesForModification do makeRegexReplacementsInFile file modifications
     Success (oldName, newName)
 
