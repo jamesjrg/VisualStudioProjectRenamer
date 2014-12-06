@@ -40,7 +40,6 @@ let modificationsForFilesInSolution oldName newName = [
 
 //Modifications for altering project references in other projects
 //A list of tuples, the first item is the regex to match, the second item the replacement text
-
 let modificationsForProjectReferences oldName newName = [
     (sprintf @"%s\\%s\.csproj" oldName oldName, sprintf @"%s\\%s\.csproj" newName newName);
     (sprintf "<Name>%s</Name>" oldName, sprintf "<Name>%s</Name>" newName);
@@ -48,7 +47,8 @@ let modificationsForProjectReferences oldName newName = [
 
 (* end config *)
 
-(* Definitions inspired by Scott Wlaschin's post on railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/ *)
+(* Definitions inspired by Scott Wlaschin's post on railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/
+*)
 
 type Result = 
     | Success of string * string
