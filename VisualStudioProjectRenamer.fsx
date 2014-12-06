@@ -1,8 +1,9 @@
 open System.IO
+open System.Text.RegularExpressions
 
 //Config
 
-let fileTypesToMatchForReplacement = [|"*.cs"|]
+let fileTypesToMatchForReplacement = ["*.cs"]
 
 //Definitions inspired by on Scott Wlaschin's railway oriented programming http://fsharpforfunandprofit.com/posts/recipe-part2/
 
@@ -62,15 +63,22 @@ let renameCsProj oldName newName =
 
 // modifying files
 
-let rec getFilesForModification basePath =
+let rec getFilesForSearch basePath =
     seq {
         for matchPattern in fileTypesToMatchForReplacement do
             yield! Directory.EnumerateFiles(basePath, matchPattern, SearchOption.AllDirectories)
     }
 
-let modifyFile filePath (replacements : (string * string) seq) = 
+let makeReplacementsInFile filePath (replacements : (string * string) seq) = 
     let oldContents = File.ReadAllText(filePath)     
     let newContents = Seq.fold (fun (state : string) (pattern : string, replacmentText : string) -> state.Replace(pattern, replacmentText)) oldContents replacements
+
+    File.WriteAllText(filePath, newContents)
+
+let regixifyFile filePath pattern replacement =
+    let oldContents = File.ReadAllText(filePath)     
+    //TODO
+    let newContents = ""
 
     File.WriteAllText(filePath, newContents)
 
@@ -81,15 +89,16 @@ let alterSlnFile oldName newName =
 
     match maybeSlnFile with
     | Some slnFilePath -> 
-        modifyFile slnFilePath [(oldName + ".csproj", newName + ".csproj")]
+        makeReplacementsInFile slnFilePath [(oldName + ".csproj", newName + ".csproj")]
         Success (oldName, newName)
     | _ -> Failure "No .sln file found"
 
 let alterCsproj oldName newName =
     printfn "Altering .csproj AssemblyName and RootNamespace"
-    let filename = getCsprojPath newName
-    //TODO  
-    //modifyFile    
+    makeReplacementsInFile (getCsprojPath newName) [
+        ("<AssemblyName>" + oldName, "<AssemblyName>" + newName);
+        ("<RootNamespace>" + oldName, "<RootNamespace>" + newName);
+    ]
     Success (oldName, newName)
 
 let alterAssemblyInfo oldName newName =
@@ -98,22 +107,36 @@ let alterAssemblyInfo oldName newName =
     match File.Exists assemblyInfoPath with
     | true ->
         printfn "Altering %s" assemblyInfoPath
-        //TODO
+        makeReplacementsInFile assemblyInfoPath [(oldName, newName)];
         Success (oldName, newName)
     | false ->
         printfn "No AssemblyInfo.cs found, skipping step"
-        Success (oldName, newName)   
+        Success (oldName, newName)
+
+let fileContainsRegex filePath pattern =
+    let contents = File.ReadAllText(filePath)
+    Regex.IsMatch(contents, pattern)
+
+let getFilesForModification newName regexMatch =
+    let filesForSearch = getFilesForSearch newName
+    Seq.filter (fun file -> fileContainsRegex file regexMatch) filesForSearch
 
 let alterNamespaces oldName newName =
     printfn "Altering namespaces"
+    let regexMatch = "(\s*using )" + oldName;
+    let regexReplace = "\1" + newName;
+    let filesForModification = getFilesForModification newName regexMatch
+    for file in filesForModification do regixifyFile file regexMatch regexReplace
     Success (oldName, newName)
 
 let alterUsings oldName newName =
     printfn "Altering usings"
+    //TODO
     Success (oldName, newName)
 
 let alterProjectReferences oldName newName =
     printfn "Altering project references"
+    //TODO
     Success (oldName, newName)
 
 parseArgs 
@@ -127,3 +150,4 @@ parseArgs
 |> bind alterUsings
 |> bind alterProjectReferences
 |> handleError
+
