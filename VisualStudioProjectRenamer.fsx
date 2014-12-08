@@ -108,7 +108,7 @@ let renameProjectDirectory oldName newName =
 let renameProjectFile oldName newName =
     let oldFileName = Path.Combine(newName, oldName + ".csproj")
     let newFileName = projectFilePath newName
-    printfn "Renaming csproj %s to %s" oldFileName newFileName
+    printfn "Renaming project file %s to %s" oldFileName newFileName
     try
         File.Move(oldFileName, newFileName);
         Success (oldName, newName)
