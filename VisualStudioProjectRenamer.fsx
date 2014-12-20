@@ -6,8 +6,9 @@ open System.Text.RegularExpressions
 //the path to the .sln file - by default the first .sln file found in the current directory
 let maybeSlnFile = Directory.EnumerateFiles(".", "*.sln") |> Seq.tryPick Some
 
-//The path to the project file
-let projectFilePath newName = Path.Combine(newName, newName + ".csproj")
+//The path to the old and new project files
+let oldProjectFilePath oldName newName = Path.Combine(newName, oldName + ".csproj") //this is after folder has already been renamed
+let newProjectFilePath newName = Path.Combine(newName, newName + ".csproj")
 
 //Project files in which references should be updated
 //to include sub-sub folders: Directory.EnumerateFiles(".", "*.csproj", SearchOption.AllDirectories)
@@ -106,8 +107,8 @@ let renameProjectDirectory oldName newName =
         | ex -> Failure ex.Message
 
 let renameProjectFile oldName newName =
-    let oldFileName = Path.Combine(newName, oldName + ".csproj")
-    let newFileName = projectFilePath newName
+    let oldFileName = oldProjectFilePath oldName newName
+    let newFileName = newProjectFilePath newName
     printfn "Renaming project file %s to %s" oldFileName newFileName
     try
         File.Move(oldFileName, newFileName);
@@ -156,7 +157,7 @@ let modifySolutionFile oldName newName =
 
 let modifyProjectFile oldName newName =
     printfn "Modifying project file"
-    makeSimpleReplacementsInFile (projectFilePath newName) (projectFileReplacements  oldName newName)
+    makeSimpleReplacementsInFile (newProjectFilePath newName) (projectFileReplacements  oldName newName)
     Success (oldName, newName)
 
 let maybeModifyAssemblyInfo oldName newName =
